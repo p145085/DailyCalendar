@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Calendar</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --success: #059669;
+      --success-light: #d1fae5;
+      --warning: #d97706;
+      --warning-light: #fef3c7;
+      --danger: #dc2626;
+      --danger-light: #fee2e2;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface-2: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --text-light: #94a3b8;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5;
+    }
+    button { cursor: pointer; border: none; background: none; font: inherit; }
+    input  { font: inherit; }
+
+    .app-header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 24px; display: flex; align-items: center;
+      justify-content: space-between; height: 60px;
+      position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow);
+    }
+    .app-title { display: flex; align-items: center; gap: 10px; }
+    .app-title h1 { font-size: 18px; font-weight: 700; }
+    .app-nav { display: flex; gap: 4px; }
+    .nav-btn {
+      padding: 6px 16px; border-radius: 6px; font-size: 14px;
+      font-weight: 500; color: var(--text-muted);
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-btn:hover { background: var(--surface-2); color: var(--text); }
+    .nav-btn.active { background: var(--primary-light); color: var(--primary); font-weight: 600; }
+
+    .app-main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .calendar-layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+
+    .calendar {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); box-shadow: var(--shadow);
+      padding: 20px; user-select: none;
+    }
+    .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .cal-arrow {
+      width: 32px; height: 32px; border-radius: 6px; font-size: 22px;
+      color: var(--text-muted); display: flex; align-items: center;
+      justify-content: center; transition: background 0.15s;
+    }
+    .cal-arrow:hover { background: var(--surface-2); color: var(--text); }
+    .cal-month-label { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .cal-month-label span { font-weight: 700; font-size: 15px; }
+    .today-btn {
+      font-size: 11px; color: var(--primary); font-weight: 600;
+      padding: 2px 8px; border-radius: 4px; border: 1px solid var(--primary);
+      transition: background 0.15s;
+    }
+    .today-btn:hover { background: var(--primary-light); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+    .cal-weekday {
+      text-align: center; font-size: 11px; font-weight: 600;
+      color: var(--text-light); text-transform: uppercase;
+      letter-spacing: 0.04em; padding: 4px 0 6px;
+    }
+    .cal-cell {
+      aspect-ratio: 1; border-radius: 8px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; cursor: pointer;
+      transition: background 0.1s; gap: 2px;
+    }
+    .cal-cell:hover { background: var(--surface-2); }
+    .cal-cell.empty { cursor: default; pointer-events: none; }
+    .cal-cell.is-past .cal-day-num { color: var(--text-light); }
+    .cal-cell.is-today { background: var(--primary); }
+    .cal-cell.is-today .cal-day-num { color: #fff; font-weight: 700; }
+    .cal-cell.is-today:hover { background: var(--primary-hover); }
+    .cal-cell.is-selected:not(.is-today) { background: var(--primary-light); }
+    .cal-cell.is-selected:not(.is-today) .cal-day-num { color: var(--primary); font-weight: 700; }
+    .cal-day-num { font-size: 13px; font-weight: 500; line-height: 1; }
+    .cal-dot { width: 5px; height: 5px; border-radius: 50%; display: block; }
+    .cal-dot.partial { background: var(--warning); }
+    .cal-dot.full    { background: var(--success); }
+    .is-today .cal-dot { background: rgba(255,255,255,0.8); }
+    .cal-legend {
+      display: flex; align-items: center; gap: 12px; margin-top: 14px;
+      padding-top: 12px; border-top: 1px solid var(--border); justify-content: flex-end;
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+
+    .day-panel {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); box-shadow: var(--shadow);
+      padding: 24px; min-height: 380px;
+    }
+    .day-header { margin-bottom: 20px; }
+    .day-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .day-title { font-size: 18px; font-weight: 700; }
+    .badge {
+      font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .badge-today  { background: var(--primary); color: #fff; }
+    .badge-past   { background: var(--surface-2); color: var(--text-muted); }
+    .badge-future { background: var(--primary-light); color: var(--primary); }
+    .day-progress { display: flex; align-items: center; gap: 10px; }
+    .day-progress-bar { flex: 1; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+    .day-progress-fill { height: 100%; background: var(--success); border-radius: 3px; transition: width 0.3s; }
+    .day-progress-label { font-size: 13px; font-weight: 600; color: var(--text-muted); min-width: 36px; text-align: right; }
+    .past-notice {
+      display: flex; align-items: center; gap: 8px; background: var(--warning-light);
+      color: var(--warning); font-size: 13px; font-weight: 500;
+      padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #fde68a;
+    }
+    .task-list { display: flex; flex-direction: column; gap: 8px; }
+    .task-row {
+      display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+      border-radius: 8px; border: 2px solid var(--border); cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .task-row:hover  { border-color: var(--primary); background: var(--primary-light); }
+    .task-row.done   { background: var(--success-light); border-color: #6ee7b7; }
+    .task-row.done:hover { border-color: var(--success); }
+    .task-row.pending {
+      border-color: var(--warning); background: var(--warning-light);
+      animation: pulse 0.8s ease infinite alternate;
+    }
+    @keyframes pulse { from { opacity: 1; } to { opacity: 0.75; } }
+    .task-check {
+      width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: border-color 0.15s, background 0.15s;
+    }
+    .task-check.checked { background: var(--success); border-color: var(--success); }
+    .task-row:hover .task-check:not(.checked) { border-color: var(--primary); }
+    .task-row.pending .task-check { border-color: var(--warning); }
+    .checkmark { color: #fff; font-size: 14px; font-weight: 700; }
+    .task-name { flex: 1; font-size: 15px; font-weight: 500; }
+    .task-row.done .task-name { text-decoration: line-through; color: var(--text-muted); }
+    .pending-hint { font-size: 12px; font-weight: 600; color: var(--warning); white-space: nowrap; }
+    .lock-icon { font-size: 13px; color: var(--text-light); opacity: 0.6; }
+    .all-done {
+      margin-top: 20px; background: var(--success-light); color: var(--success);
+      border: 1px solid #6ee7b7; border-radius: 8px; padding: 12px 16px;
+      font-weight: 600; text-align: center; font-size: 15px;
+    }
+    .empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 14px; }
+
+    .progress-view h2 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px; text-align: center; box-shadow: var(--shadow);
+    }
+    .stat-icon  { font-size: 24px; margin-bottom: 8px; }
+    .stat-value { font-size: 32px; font-weight: 800; color: var(--primary); line-height: 1; }
+    .stat-label { font-size: 13px; font-weight: 700; margin-top: 4px; }
+    .stat-sub   { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .progress-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px 24px; box-shadow: var(--shadow); margin-bottom: 20px;
+    }
+    .progress-section h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .section-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+    .heatmap-wrap { display: flex; align-items: flex-start; gap: 6px; overflow-x: auto; }
+    .heatmap-day-labels { display: flex; flex-direction: column; gap: 3px; padding-top: 1px; }
+    .heatmap-day-labels span {
+      height: 13px; font-size: 10px; color: var(--text-light);
+      line-height: 13px; width: 10px; text-align: center;
+    }
+    .heatmap-grid { display: flex; gap: 3px; }
+    .heatmap-col  { display: flex; flex-direction: column; gap: 3px; }
+    .heatmap-cell { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; }
+    .heatmap-legend { display: flex; align-items: center; gap: 4px; margin-top: 12px; font-size: 11px; color: var(--text-muted); }
+    .heatmap-legend .heatmap-cell { width: 11px; height: 11px; }
+    .task-stats-list { display: flex; flex-direction: column; gap: 16px; }
+    .task-stat-row { display: flex; flex-direction: column; gap: 6px; }
+    .task-stat-top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .task-stat-name { font-weight: 600; font-size: 15px; }
+    .task-stat-badges { display: flex; gap: 8px; }
+    .streak-badge, .rate-badge {
+      font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+    }
+    .streak-badge { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .rate-badge   { background: var(--primary-light); color: var(--primary); border: 1px solid #c7d2fe; }
+    .stat-bar { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+    .stat-bar-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.4s; }
+
+    .task-manager { max-width: 560px; }
+    .task-manager h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .task-manager .section-desc { margin-bottom: 20px; }
+    .add-task-form { display: flex; gap: 10px; margin-bottom: 6px; }
+    .task-input {
+      flex: 1; padding: 10px 14px; border-radius: 8px;
+      border: 2px solid var(--border); outline: none; font-size: 14px;
+      transition: border-color 0.15s;
+    }
+    .task-input:focus { border-color: var(--primary); }
+    .task-input.input-error { border-color: var(--danger); }
+    .input-error-msg { font-size: 12px; color: var(--danger); margin-bottom: 12px; min-height: 18px; }
+    .btn-primary {
+      padding: 10px 20px; background: var(--primary); color: #fff;
+      border-radius: 8px; font-size: 14px; font-weight: 600;
+      transition: background 0.15s; white-space: nowrap;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .task-manage-list {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+    }
+    .task-manage-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border); gap: 12px;
+    }
+    .task-manage-row:last-child { border-bottom: none; }
+    .task-manage-name { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; }
+    .task-bullet { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); flex-shrink: 0; }
+    .btn-remove {
+      padding: 6px 14px; font-size: 13px; font-weight: 600; border-radius: 6px;
+      border: 1px solid var(--border); color: var(--text-muted);
+      white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .btn-remove:hover    { background: var(--danger-light); color: var(--danger); border-color: var(--danger); }
+    .btn-remove.confirm  { background: var(--danger); color: #fff; border-color: var(--danger); animation: pulse 0.6s ease infinite alternate; }
+
+    @media (max-width: 700px) {
+      .app-main { padding: 12px; }
+      .calendar-layout { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .app-title h1 { font-size: 16px; }
+      .nav-btn { padding: 6px 10px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-title">
+    <span>&#128197;</span>
+    <h1>Daily Calendar</h1>
+  </div>
+  <nav class="app-nav">
+    <button class="nav-btn active" data-view="calendar">Calendar</button>
+    <button class="nav-btn" data-view="progress">Progress</button>
+    <button class="nav-btn" data-view="tasks">Tasks</button>
+  </nav>
+</header>
+
+<main class="app-main">
+  <div id="view-calendar" class="view active">
+    <div class="calendar-layout">
+      <div class="calendar">
+        <div class="cal-nav">
+          <button class="cal-arrow" id="cal-prev">&#8249;</button>
+          <div class="cal-month-label">
+            <span id="cal-month-label"></span>
+            <button class="today-btn" id="cal-today-btn">Today</button>
+          </div>
+          <button class="cal-arrow" id="cal-next">&#8250;</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="cal-legend">
+          <span class="legend-item"><span class="cal-dot partial"></span> Partial</span>
+          <span class="legend-item"><span class="cal-dot full"></span> All done</span>
+        </div>
+      </div>
+      <div class="day-panel" id="day-panel"></div>
+    </div>
+  </div>
+
+  <div id="view-progress" class="view">
+    <div class="progress-view">
+      <h2>Progress Overview</h2>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="progress-section">
+        <h3>Activity Heatmap</h3>
+        <p class="section-desc">Last 16 weeks &mdash; hover cells for details</p>
+        <div id="heatmap-container"></div>
+      </div>
+      <div class="progress-section">
+        <h3>Per-Task Stats</h3>
+        <div id="task-stats"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-tasks" class="view">
+    <div class="task-manager">
+      <h2>Manage Tasks</h2>
+      <p class="section-desc">Tasks appear on every day. Removing a task preserves its history.</p>
+      <form class="add-task-form" id="add-task-form">
+        <input type="text" class="task-input" id="task-input" placeholder="New task name..." maxlength="60" />
+        <button type="submit" class="btn-primary" id="add-task-btn" disabled>Add Task</button>
+      </form>
+      <p class="input-error-msg" id="task-error"></p>
+      <div class="task-manage-list" id="task-manage-list"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  const MONTHS       = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const WEEKDAYS     = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const WDAYS_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const HEAT_COLORS  = ['#e2e8f0','#bfdbfe','#60a5fa','#2563eb','#1e3a8a'];
+  const STORAGE_KEY  = 'dailycalendar-v1';
+  const CONFIRM_MS   = 2000;
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let viewDate     = new Date(today.getFullYear(), today.getMonth(), 1);
+  let selectedDate = new Date(today);
+  let pendingTask  = null;
+  let pendingTO    = null;
+  let confirmDel   = null;
+  let confirmTO    = null;
+  let data         = loadData();
+
+  // ── Persistence ────────────────────────────────────────────────────────────
+  function loadData() {
+    try {
+      const s = localStorage.getItem(STORAGE_KEY);
+      return s ? JSON.parse(s) : { tasks: ['Duolingo'], completions: {} };
+    } catch { return { tasks: ['Duolingo'], completions: {} }; }
+  }
+  function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+  // ── Date utils ─────────────────────────────────────────────────────────────
+  function ds(d) {
+    return d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0');
+  }
+  function sameDay(a, b)  { return ds(a) === ds(b); }
+  function isPast(d)      { return d < today && !sameDay(d, today); }
+  function isFuture(d)    { return d > today && !sameDay(d, today); }
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-' + btn.dataset.view).classList.add('active');
+      if (btn.dataset.view === 'progress') renderProgress();
+      if (btn.dataset.view === 'tasks')    renderTaskManager();
+    });
+  });
+
+  // ── Calendar ───────────────────────────────────────────────────────────────
+  function completionLevel(dateStr) {
+    if (!data.tasks.length) return 0;
+    const day  = data.completions[dateStr] || {};
+    const done = data.tasks.filter(t => day[t]).length;
+    return done === 0 ? 0 : done === data.tasks.length ? 2 : 1;
+  }
+
+  function renderCalendar() {
+    const year  = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    document.getElementById('cal-month-label').textContent = MONTHS[month] + ' ' + year;
+
+    const firstDow    = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayDs     = ds(today);
+    const selectedDs  = ds(selectedDate);
+    const grid        = document.getElementById('cal-grid');
+    grid.innerHTML    = '';
+
+    WDAYS_SHORT.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'cal-weekday';
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+
+    for (let i = 0; i < firstDow; i++) {
+      const el = document.createElement('div');
+      el.className = 'cal-cell empty';
+      grid.appendChild(el);
+    }
+
+    for (let n = 1; n <= daysInMonth; n++) {
+      const date    = new Date(year, month, n);
+      const dateStr = ds(date);
+      const el      = document.createElement('div');
+      let cls = 'cal-cell';
+      if (dateStr === todayDs)    cls += ' is-today';
+      else if (isPast(date))      cls += ' is-past';
+      if (dateStr === selectedDs) cls += ' is-selected';
+      el.className = cls;
+      el.setAttribute('role', 'button');
+      el.setAttribute('tabindex', '0');
+
+      const num = document.createElement('span');
+      num.className   = 'cal-day-num';
+      num.textContent = n;
+      el.appendChild(num);
+
+      const lvl = completionLevel(dateStr);
+      if (lvl > 0) {
+        const dot = document.createElement('span');
+        dot.className = 'cal-dot ' + (lvl === 2 ? 'full' : 'partial');
+        el.appendChild(dot);
+      }
+
+      el.addEventListener('click', () => selectDate(date));
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') selectDate(date); });
+      grid.appendChild(el);
+    }
+  }
+
+  function selectDate(date) {
+    clearTimeout(pendingTO);
+    pendingTask  = null;
+    selectedDate = date;
+    renderCalendar();
+    renderDayPanel();
+  }
+
+  document.getElementById('cal-prev').addEventListener('click', () => {
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  document.getElementById('cal-next').addEventListener('click', () => {
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
+    renderCalendar();
+  });
+  document.getElementById('cal-today-btn').addEventListener('click', () => {
+    viewDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    selectDate(new Date(today));
+  });
+
+  // ── Day Panel ──────────────────────────────────────────────────────────────
+  function renderDayPanel() {
+    const panel    = document.getElementById('day-panel');
+    const dateStr  = ds(selectedDate);
+    const isToday  = sameDay(selectedDate, today);
+    const past     = isPast(selectedDate);
+    const future   = isFuture(selectedDate);
+    const dayData  = data.completions[dateStr] || {};
+    const doneCount = data.tasks.filter(t => dayData[t]).length;
+    const allDone  = data.tasks.length > 0 && doneCount === data.tasks.length;
+
+    const label = WEEKDAYS[selectedDate.getDay()] + ', ' +
+      MONTHS[selectedDate.getMonth()] + ' ' + selectedDate.getDate() + ', ' + selectedDate.getFullYear();
+
+    const badge = isToday  ? '<span class="badge badge-today">Today</span>'
+                : past     ? '<span class="badge badge-past">Past</span>'
+                : future   ? '<span class="badge badge-future">Upcoming</span>' : '';
+
+    const pct = data.tasks.length ? (doneCount / data.tasks.length) * 100 : 0;
+    const progressBar = data.tasks.length
+      ? `<div class="day-progress">
+           <div class="day-progress-bar"><div class="day-progress-fill" style="width:${pct}%"></div></div>
+           <span class="day-progress-label">${doneCount}/${data.tasks.length}</span>
+         </div>` : '';
+
+    const pastNotice = past
+      ? `<div class="past-notice">&#128274; Past day &mdash; click once to unlock, then again to toggle</div>` : '';
+
+    const taskRows = data.tasks.map(task => {
+      const done    = !!dayData[task];
+      const pending = pendingTask === task && past;
+      const rowCls  = 'task-row' + (done ? ' done' : '') + (pending ? ' pending' : '');
+      const chkCls  = 'task-check' + (done ? ' checked' : '');
+      const hint    = pending ? '<span class="pending-hint">Click again to confirm</span>' : '';
+      const lock    = (past && !pending) ? '<span class="lock-icon">&#128274;</span>' : '';
+      return `<div class="${rowCls}" data-task="${escHtml(task)}" role="checkbox" aria-checked="${done}" tabindex="0">
+                <div class="${chkCls}">${done ? '<span class="checkmark">&#10003;</span>' : ''}</div>
+                <span class="task-name">${escHtml(task)}</span>${hint}${lock}
+              </div>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="day-header">
+        <div class="day-title-row"><h2 class="day-title">${label}</h2>${badge}</div>
+        ${progressBar}
+      </div>
+      ${pastNotice}
+      <div class="task-list">
+        ${data.tasks.length === 0
+          ? '<div class="empty-state">No tasks yet. Add some in the <strong>Tasks</strong> tab.</div>'
+          : taskRows}
+      </div>
+      ${allDone ? '<div class="all-done">&#127881; All tasks completed for this day!</div>' : ''}`;
+
+    panel.querySelectorAll('.task-row').forEach(row => {
+      const h = () => handleTaskClick(dateStr, row.dataset.task, past);
+      row.addEventListener('click', h);
+      row.addEventListener('keydown', e => { if (e.key === 'Enter') h(); });
+    });
+  }
+
+  function handleTaskClick(dateStr, task, past) {
+    if (!past) { toggleTask(dateStr, task); return; }
+    if (pendingTask === task) {
+      clearTimeout(pendingTO);
+      pendingTask = null;
+      toggleTask(dateStr, task);
+    } else {
+      clearTimeout(pendingTO);
+      pendingTask = task;
+      renderDayPanel();
+      pendingTO = setTimeout(() => { pendingTask = null; renderDayPanel(); }, CONFIRM_MS);
+    }
+  }
+
+  function toggleTask(dateStr, task) {
+    if (!data.completions[dateStr]) data.completions[dateStr] = {};
+    data.completions[dateStr][task] = !data.completions[dateStr][task];
+    save();
+    renderCalendar();
+    renderDayPanel();
+  }
+
+  // ── Progress ───────────────────────────────────────────────────────────────
+  function getStreak() {
+    if (!data.tasks.length) return 0;
+    let streak = 0, d = new Date(today);
+    while (true) {
+      const day = data.completions[ds(d)] || {};
+      if (data.tasks.every(t => day[t])) { streak++; d.setDate(d.getDate() - 1); }
+      else break;
+    }
+    return streak;
+  }
+
+  function getTaskStreak(task) {
+    let streak = 0, d = new Date(today);
+    while (true) {
+      if (data.completions[ds(d)]?.[task]) { streak++; d.setDate(d.getDate() - 1); }
+      else break;
+    }
+    return streak;
+  }
+
+  function getRangeStats(start, end) {
+    let done = 0, total = 0, d = new Date(start);
+    while (d <= end) {
+      const day = data.completions[ds(d)] || {};
+      done  += data.tasks.filter(t => day[t]).length;
+      total += data.tasks.length;
+      d.setDate(d.getDate() + 1);
+    }
+    return { done, total };
+  }
+
+  function pctStr(done, total) { return (total > 0 ? Math.round((done / total) * 100) : 0) + '%'; }
+
+  function renderProgress() {
+    const streak = getStreak();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const { done: mD, total: mT } = getRangeStats(monthStart, today);
+    const w7 = new Date(today); w7.setDate(w7.getDate() - 6);
+    const { done: wD, total: wT } = getRangeStats(w7, today);
+    const allDates = Object.keys(data.completions);
+    const aD = allDates.reduce((s, d) => s + data.tasks.filter(t => data.completions[d]?.[t]).length, 0);
+    const aT = allDates.length * data.tasks.length;
+
+    document.getElementById('stats-grid').innerHTML = `
+      <div class="stat-card"><div class="stat-icon">&#128293;</div><div class="stat-value">${streak}</div><div class="stat-label">Current Streak</div><div class="stat-sub">consecutive days</div></div>
+      <div class="stat-card"><div class="stat-icon">&#128197;</div><div class="stat-value">${pctStr(mD,mT)}</div><div class="stat-label">${MONTHS[today.getMonth()]}</div><div class="stat-sub">${mD}/${mT} completed</div></div>
+      <div class="stat-card"><div class="stat-icon">&#128200;</div><div class="stat-value">${pctStr(wD,wT)}</div><div class="stat-label">Last 7 Days</div><div class="stat-sub">${wD}/${wT} completed</div></div>
+      <div class="stat-card"><div class="stat-icon">&#127942;</div><div class="stat-value">${pctStr(aD,aT)}</div><div class="stat-label">All Time</div><div class="stat-sub">${aD}/${aT} completed</div></div>`;
+
+    // Heatmap
+    const end = new Date(today); end.setDate(end.getDate() + (6 - end.getDay()));
+    const hStart = new Date(end); hStart.setDate(hStart.getDate() - 16 * 7 + 1);
+    let cols = '', cur = new Date(hStart);
+    while (cur <= end) {
+      cols += '<div class="heatmap-col">';
+      for (let i = 0; i < 7; i++) {
+        const dateStr = ds(cur), fut = cur > today;
+        const day  = data.completions[dateStr] || {};
+        const done = data.tasks.filter(t => day[t]).length;
+        let lvl = 0;
+        if (!fut && data.tasks.length && done > 0)
+          lvl = done === data.tasks.length ? 4 : done >= data.tasks.length * .75 ? 3 : done >= data.tasks.length * .5 ? 2 : 1;
+        const bg = fut ? 'transparent' : HEAT_COLORS[lvl];
+        cols += `<div class="heatmap-cell" style="background:${bg}" title="${dateStr}: ${done}/${data.tasks.length}"></div>`;
+        cur.setDate(cur.getDate() + 1);
+      }
+      cols += '</div>';
+    }
+    document.getElementById('heatmap-container').innerHTML =
+      `<div class="heatmap-wrap">
+         <div class="heatmap-day-labels">${'SMTWTFS'.split('').map(l=>`<span>${l}</span>`).join('')}</div>
+         <div class="heatmap-grid">${cols}</div>
+       </div>
+       <div class="heatmap-legend">
+         <span>Less</span>${HEAT_COLORS.map(c=>`<div class="heatmap-cell" style="background:${c}"></div>`).join('')}<span>More</span>
+       </div>`;
+
+    // Per-task stats
+    const allDatesArr = Object.keys(data.completions);
+    document.getElementById('task-stats').innerHTML = data.tasks.length
+      ? `<div class="task-stats-list">${data.tasks.map(task => {
+          const streak = getTaskStreak(task);
+          const done   = allDatesArr.filter(d => data.completions[d]?.[task]).length;
+          const rate   = allDatesArr.length ? Math.round((done / allDatesArr.length) * 100) : 0;
+          return `<div class="task-stat-row">
+            <div class="task-stat-top">
+              <span class="task-stat-name">${escHtml(task)}</span>
+              <div class="task-stat-badges">
+                <span class="streak-badge">&#128293; ${streak} day streak</span>
+                <span class="rate-badge">${rate}% all-time</span>
+              </div>
+            </div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width:${rate}%"></div></div>
+          </div>`;
+        }).join('')}</div>`
+      : '<p class="empty-state">No tasks yet.</p>';
+  }
+
+  // ── Task Manager ───────────────────────────────────────────────────────────
+  function renderTaskManager() {
+    const list = document.getElementById('task-manage-list');
+    if (!data.tasks.length) {
+      list.innerHTML = '<div class="empty-state" style="padding:20px">No tasks yet. Add one above.</div>';
+      return;
+    }
+    list.innerHTML = data.tasks.map(task => {
+      const pending = confirmDel === task;
+      return `<div class="task-manage-row">
+        <span class="task-manage-name"><span class="task-bullet"></span>${escHtml(task)}</span>
+        <button class="btn-remove${pending ? ' confirm' : ''}" data-task="${escHtml(task)}">
+          ${pending ? 'Confirm remove' : 'Remove'}
+        </button>
+      </div>`;
+    }).join('');
+
+    list.querySelectorAll('.btn-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const task = btn.dataset.task;
+        if (confirmDel === task) {
+          clearTimeout(confirmTO);
+          confirmDel = null;
+          data.tasks = data.tasks.filter(t => t !== task);
+          save(); renderTaskManager(); renderCalendar(); renderDayPanel();
+        } else {
+          clearTimeout(confirmTO);
+          confirmDel = task;
+          renderTaskManager();
+          confirmTO = setTimeout(() => { confirmDel = null; renderTaskManager(); }, 3000);
+        }
+      });
+    });
+  }
+
+  document.getElementById('add-task-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const input = document.getElementById('task-input');
+    const errEl = document.getElementById('task-error');
+    const name  = input.value.trim();
+    if (!name) return;
+    if (data.tasks.includes(name)) {
+      errEl.textContent = 'A task with that name already exists.';
+      input.classList.add('input-error');
+      return;
+    }
+    errEl.textContent = '';
+    input.classList.remove('input-error');
+    data.tasks.push(name);
+    save();
+    input.value = '';
+    document.getElementById('add-task-btn').disabled = true;
+    renderTaskManager(); renderCalendar(); renderDayPanel();
+  });
+
+  document.getElementById('task-input').addEventListener('input', function () {
+    document.getElementById('task-error').textContent = '';
+    this.classList.remove('input-error');
+    document.getElementById('add-task-btn').disabled = !this.value.trim();
+  });
+
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  renderCalendar();
+  renderDayPanel();
+  renderTaskManager();
+})();
+</script>
+</body>
+</html>
